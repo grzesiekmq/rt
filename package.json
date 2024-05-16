@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "gl-matrix": "^3.4.3",
+    "mersenne-twister": "^1.1.0",
+    "nodemon": "^3.1.0"
+  }
+}
