@@ -15,7 +15,7 @@ const center = vec3.fromValues(0, 0, -1);
 const vpHeight = 2.0;
 const vpWidth = (16.0 / 9.0) * vpHeight;
 const focalLength = 1.0;
-const samplesPerPixel = 10;
+const samplesPerPixel = 100;
 
 const h = vec3.fromValues(vpWidth, 0, 0);
 const v = vec3.fromValues(0, -vpHeight, 0);
@@ -41,8 +41,6 @@ const rayGlobal = {
 };
 
 const record = {};
-
-
 
 const world = {
   objects: [],
@@ -77,18 +75,109 @@ function hitSphere(center, r, ray, tMin, tMax, record) {
 
   return true;
 }
+
+function clamp(min, value, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+// based on my implicit rt triangle
+function hitTriangle(ray, record) {
+  const [originX, originY] = ray.origin;
+  const [dirX, dirY] = ray.dir;
+
+  let t0 = (1.0 - originY - originX) / (dirX + dirY);
+  let t1 = -(1.0 - originY + originX) / (dirX - dirY);
+
+  const x = 1.0 - (originY + t0 * dirY);
+  const y = 1.0 - (originY + t1 * dirY);
+
+  if (x <= 0) {
+    if (t0 > 0) {
+      // console.log('hit x && t0')
+      const p = ray.at(t0);
+      const out = vec3.create();
+      const normal = vec3.create();
+
+      vec3.sub(out, p, center);
+      vec3.normalize(normal, out);
+
+      record.p = p;
+      record.normal = normal;
+
+      return true;
+    }
+  } else if (y <= 0) {
+    if (t1 > 0) {
+      // console.log('hit y && t1')
+      const p = ray.at(t1);
+      const out = vec3.create();
+      const normal = vec3.create();
+
+      vec3.sub(out, p, center);
+      vec3.normalize(normal, out);
+
+      record.p = p;
+      record.normal = normal;
+
+      return true;
+    }
+  } else {
+    return false;
+  }
+}
+
 const sphere1 = { hitSphere };
 sphere1.material = {};
 sphere1.material.type = "lambertian";
-sphere1.center = vec3.fromValues(-0.5, 0, -1);
+sphere1.center = vec3.fromValues(-1, 0, -1);
+sphere1.radius = 0.2;
 sphere1.attenuation = vec3.fromValues(0.5, 0.5, 0.5);
 const sphere2 = { hitSphere };
 sphere2.material = {};
 sphere2.material.type = "metal";
 sphere2.center = vec3.fromValues(0.5, 0, -1);
+sphere2.radius = 0.2;
 sphere2.attenuation = vec3.fromValues(0.8, 0.6, 0.2);
+const groundSphere = { hitSphere };
+groundSphere.material = { type: "metal" };
+groundSphere.center = vec3.fromValues(0, -100.5, -1);
+groundSphere.radius = 100;
+groundSphere.attenuation = vec3.fromValues(0.8, 0.6, 0.2);
 
-world.objects.push(sphere1, sphere2);
+const sphere3 = { hitSphere };
+sphere3.material = {};
+sphere3.material.type = "metal";
+sphere3.center = vec3.fromValues(-0.5, 0, -1);
+sphere3.radius = 0.2;
+sphere3.attenuation = vec3.fromValues(
+  generator.random(),
+  generator.random(),
+  generator.random()
+);
+
+const sphere4 = { hitSphere };
+sphere4.material = {};
+sphere4.material.type = "metal";
+sphere4.center = vec3.fromValues(0, 0, -1);
+sphere4.radius = 0.2;
+sphere4.attenuation = vec3.fromValues(
+  generator.random(),
+  generator.random(),
+  generator.random()
+);
+
+const sphere5 = { hitSphere };
+sphere5.material = {};
+sphere5.material.type = "metal";
+sphere5.center = vec3.fromValues(1, 0, -1);
+sphere5.radius = 0.2;
+sphere5.attenuation = vec3.fromValues(
+  generator.random(),
+  generator.random(),
+  generator.random()
+);
+
+world.objects.push(sphere1, sphere2, sphere3, sphere4, sphere5, groundSphere);
 
 const out = vec3.create();
 const oh = vec3.create();
@@ -111,12 +200,12 @@ vec3.scale(halfPixelDeltas, pixelDeltas, 0.5);
 
 vec3.add(pixelLoc, lowerLeft, halfPixelDeltas);
 
-console.log("pixel loc", pixelLoc);
+// console.log("pixel loc", pixelLoc);
 function hit(ray, tMin, tMax, record, depth, world, color) {
   let hit = false;
 
   for (const obj of world.objects) {
-    if (obj.hitSphere(obj.center, 0.5, ray, tMin, tMax, record)) {
+    if (obj.hitSphere(obj.center, obj.radius, ray, tMin, tMax, record)) {
       hit = true;
       const rec = record;
       if (obj.material.type === "lambertian") {
@@ -164,6 +253,47 @@ function hit(ray, tMin, tMax, record, depth, world, color) {
   }
   return hit;
 }
+
+function rayColorTriangle(ray, record, depth) {
+  if (depth <= 0) {
+    return vec3.fromValues(0, 0, 0);
+  }
+  if (hitTriangle(ray, record)) {
+    // console.log("triangle hit");
+
+    const attenuatedColor = vec3.create();
+
+    const scatterDirection = vec3.create();
+
+    vec3.add(scatterDirection, record.normal, randomUnitVec());
+
+    ray.origin = record.p;
+    ray.dir = scatterDirection;
+
+    const scattered = ray;
+    vec3.mul(
+      attenuatedColor,
+      rayColor(scattered, depth - 1, world),
+      vec3.fromValues(0.5, 0.5, 0.5)
+    );
+
+    //metal
+
+    // const reflected = reflect(ray.dir, record.normal);
+    // ray.origin = record.p;
+    // ray.dir = reflected;
+
+    // vec3.mul(
+    //   attenuatedColor,
+    //   rayColor(scattered, depth - 1, world),
+    //   vec3.fromValues(generator.random(), generator.random(), generator.random())
+    // );
+
+    return attenuatedColor;
+  }
+  return vec3.fromValues(0, 0, 0);
+}
+
 function rayColor(ray, depth, world) {
   if (depth <= 0) {
     return vec3.fromValues(0, 0, 0);
@@ -205,7 +335,7 @@ function random(min, max) {
   );
 }
 
-console.log(random(-1, 1));
+// console.log(random(-1, 1));
 
 function randomInUnitSphere() {
   while (true) {
@@ -286,8 +416,8 @@ function addEq(v1, v2) {
 function render(world) {
   for (let x = 0; x < width; x++) {
     for (let y = 0; y < height; y++) {
-      const r = x / width;
-      const g = y / height;
+      const r = Math.abs(x / width);
+      const g = Math.abs(y / height);
       const rh = vec3.create();
       const lowerLeftRh = vec3.create();
       const gv = vec3.create();
@@ -320,20 +450,33 @@ function render(world) {
       const startingColor = vec3.fromValues(0, 0, 0);
 
       const scaledColor = vec3.fromValues(0, 0, 0);
-      // console.log(ray)
+
+      let color;
 
       for (let sample = 0; sample < samplesPerPixel; sample++) {
         const ray = getRay(x, y);
 
         vec3.scale(
           scaledColor,
-          addEq(startingColor, rayColor(ray, 50, world)),
+          addEq(startingColor, rayColorTriangle(ray, record, 5)),
           1.0 / samplesPerPixel
         );
+        ray.origin = vec3.fromValues(-2, -2, 0);
+        color = rayColorTriangle(ray, record, 5);
       }
+
       const scaledColorInt = new Int32Array(scaledColor);
       const [red, green, blue] = scaledColorInt;
-      ctx.fillStyle = `rgb(${red},${green},${blue})`;
+      const [triRed, triGreen, triBlue] = color;
+
+      // ctx.fillStyle = `rgb(${red},${green},${blue})`;
+
+      // intentionally overwrite fillStyle to test triangle
+      ctx.fillStyle = `rgb(${Math.round(triRed)},${Math.round(
+        triGreen
+      )},${Math.round(triBlue)})`;
+
+      // console.log(ctx.fillStyle)
 
       ctx.fillRect(x, y, 1, 1);
     }
