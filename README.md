@@ -41,3 +41,8 @@ implicit-RT-triangle — Lua prototype (Love2D) using same intersection logic
 ## License
 
 ISC
+
+---
+
+*README assisted by ChatGPT.  
+The project code and design were created solely by the author without AI assistance.*
